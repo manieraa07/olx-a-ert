@@ -1,12 +1,11 @@
 name: OLX Alert
 
 on:
-  workflow_dispatch: # wyzwalane przez cron-job.org lub ręcznie
+  workflow_dispatch:
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -17,7 +16,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install requests beautifulsoup4
 
       - name: Restore seen offers cache
         uses: actions/cache@v4
