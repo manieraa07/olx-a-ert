@@ -13,7 +13,7 @@ ITEMS = [
     {
         "name": "Pad Xbox",
         "url": (
-            "https://www.olx.pl/elektronika/gry-konsole/akcesoria-gamingowe/"
+            "https://www.olx.pl/oferty/"
             "?search[query]=pad+xbox"
             "&search[filter_float_price:to]=60"
             "&search[filter_enum_state][0]=used"
@@ -24,7 +24,7 @@ ITEMS = [
     {
         "name": "DualSense PS5",
         "url": (
-            "https://www.olx.pl/elektronika/gry-konsole/akcesoria-gamingowe/"
+            "https://www.olx.pl/oferty/"
             "?search[query]=dualsense"
             "&search[filter_float_price:to]=100"
             "&search[filter_enum_state][0]=used"
@@ -35,7 +35,7 @@ ITEMS = [
     {
         "name": "JBL Flip 6",
         "url": (
-            "https://www.olx.pl/elektronika/"
+            "https://www.olx.pl/oferty/"
             "?search[query]=jbl+flip+6"
             "&search[filter_float_price:to]=160"
             "&search[filter_enum_state][0]=used"
@@ -70,7 +70,7 @@ def save_seen(seen):
     with open(SEEN_FILE, "w", encoding="utf-8") as f:
         json.dump(seen, f, ensure_ascii=False, indent=2)
 
-# ── Parsowanie JS stringa (skopiowane z działającego skryptu) ─────────────────
+# ── Parsowanie JS stringa ─────────────────────────────────────────────────────
 def znajdz_ads_w_dict(data, depth=0):
     if depth > 12:
         return None
@@ -178,17 +178,14 @@ def pobierz_oferty(url, max_price):
     oferty = []
     for ad in ads:
         try:
-            # Pomijamy firmy
             if ad.get("business", False):
                 continue
 
             tytul = ad.get("title", "")
 
-            # Pomijamy serwisy po tytule
             if any(kw in tytul.lower() for kw in SERWIS_KEYWORDS):
                 continue
 
-            # Pomijamy jeśli brak wysyłki (delivery == False lub brak)
             delivery = ad.get("delivery")
             if delivery is False:
                 continue
