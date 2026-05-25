@@ -1,1 +1,45 @@
+name: OLX Alert
 
+on:
+  schedule:
+    # Co godzinę między 7:00 a 23:00 (UTC+2 = 5:00-21:00 UTC)
+    - cron: "0 5-21 * * *"
+  workflow_dispatch: # możliwość ręcznego uruchomienia
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Restore seen offers cache
+        uses: actions/cache@v4
+        with:
+          path: seen_offers.json
+          key: seen-offers-${{ github.run_id }}
+          restore-keys: |
+            seen-offers-
+
+      - name: Run scraper
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+        run: python scraper.py
+
+      - name: Save seen offers cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: seen_offers.json
+          key: seen-offers-${{ github.run_id }}
