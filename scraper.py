@@ -9,13 +9,13 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
 # ── Konfiguracja przedmiotów ──────────────────────────────────────────────────
+# Format URL OLX: /kategoria/q-fraza/?search[filtry]
 ITEMS = [
     {
         "name": "Pad Xbox",
         "url": (
-            "https://www.olx.pl/oferty/"
-            "?search[query]=pad+xbox"
-            "&search[filter_float_price:to]=60"
+            "https://www.olx.pl/elektronika/gry-konsole/akcesoria-gamingowe/q-pad-xbox/"
+            "?search[filter_float_price:to]=60"
             "&search[filter_enum_state][0]=used"
             "&search[order]=created_at:desc"
         ),
@@ -24,9 +24,8 @@ ITEMS = [
     {
         "name": "DualSense PS5",
         "url": (
-            "https://www.olx.pl/oferty/"
-            "?search[query]=dualsense"
-            "&search[filter_float_price:to]=100"
+            "https://www.olx.pl/elektronika/gry-konsole/akcesoria-gamingowe/q-dualsense/"
+            "?search[filter_float_price:to]=100"
             "&search[filter_enum_state][0]=used"
             "&search[order]=created_at:desc"
         ),
@@ -35,9 +34,8 @@ ITEMS = [
     {
         "name": "JBL Flip 6",
         "url": (
-            "https://www.olx.pl/oferty/"
-            "?search[query]=jbl+flip+6"
-            "&search[filter_float_price:to]=160"
+            "https://www.olx.pl/elektronika/q-jbl-flip-6/"
+            "?search[filter_float_price:to]=160"
             "&search[filter_enum_state][0]=used"
             "&search[order]=created_at:desc"
         ),
@@ -70,7 +68,7 @@ def save_seen(seen):
     with open(SEEN_FILE, "w", encoding="utf-8") as f:
         json.dump(seen, f, ensure_ascii=False, indent=2)
 
-# ── Parsowanie JS stringa ─────────────────────────────────────────────────────
+# ── Parsowanie JS stringa (identyczne z działającym skryptem mieszkań) ────────
 def znajdz_ads_w_dict(data, depth=0):
     if depth > 12:
         return None
@@ -180,16 +178,12 @@ def pobierz_oferty(url, max_price):
         try:
             if ad.get("business", False):
                 continue
-
             tytul = ad.get("title", "")
-
             if any(kw in tytul.lower() for kw in SERWIS_KEYWORDS):
                 continue
-
             delivery = ad.get("delivery")
             if delivery is False:
                 continue
-
             cena = wyciagnij_cene(ad)
             if cena is None:
                 continue
@@ -197,10 +191,8 @@ def pobierz_oferty(url, max_price):
                 cena = float(str(cena).replace(",", ".").replace(" ", "").replace("\xa0", ""))
             except:
                 continue
-
             if cena > max_price:
                 continue
-
             oferty.append({
                 "id": str(ad.get("id", "")),
                 "tytul": tytul,
@@ -209,7 +201,6 @@ def pobierz_oferty(url, max_price):
                 "photo": (ad.get("photos") or [{}])[0].get("link", "")
                          .replace("{width}", "400").replace("{height}", "300"),
             })
-
         except Exception as e:
             print(f"  Pomijam ofertę z błędem: {e}")
             continue
