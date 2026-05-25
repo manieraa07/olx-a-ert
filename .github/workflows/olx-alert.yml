@@ -1,10 +1,7 @@
 name: OLX Alert
 
 on:
-  schedule:
-    # Co godzinę między 7:00 a 23:00 (UTC+2 = 5:00-21:00 UTC)
-  
-  workflow_dispatch: # możliwość ręcznego uruchomienia
+  workflow_dispatch: # wyzwalane przez cron-job.org lub ręcznie
 
 jobs:
   scrape:
