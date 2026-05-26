@@ -14,9 +14,11 @@ ITEMS = [
         "url": (
             "https://www.olx.pl/elektronika/gry-konsole/akcesoria-gamingowe/q-pad-xbox/"
             "?search[filter_float_price:to]=60"
+            "&search[filter_float_price:from]=40"
             "&search[filter_enum_state][0]=used"
             "&search[order]=created_at:desc"
         ),
+        "min_price": 40,
         "max_price": 60,
     },
     {
@@ -24,9 +26,11 @@ ITEMS = [
         "url": (
             "https://www.olx.pl/elektronika/gry-konsole/akcesoria-gamingowe/q-dualsense/"
             "?search[filter_float_price:to]=100"
+            "&search[filter_float_price:from]=60"
             "&search[filter_enum_state][0]=used"
             "&search[order]=created_at:desc"
         ),
+        "min_price": 60,
         "max_price": 100,
     },
     {
@@ -34,9 +38,11 @@ ITEMS = [
         "url": (
             "https://www.olx.pl/elektronika/q-jbl-flip-6/"
             "?search[filter_float_price:to]=160"
+            "&search[filter_float_price:from]=80"
             "&search[filter_enum_state][0]=used"
             "&search[order]=created_at:desc"
         ),
+        "min_price": 80,
         "max_price": 160,
     },
 ]
@@ -53,12 +59,18 @@ HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
-SERWIS_KEYWORDS = ["serwis", "naprawa", "części", "repair", "sklep", "hurtownia"]
+SERWIS_KEYWORDS = ["serwis", "naprawa", "części", "repair", "sklep", "hurtownia",
+                   "etui", "nakładka", "uchwyt", "stacja ładująca", "ładowarka",
+                   "analog", "grip", "trigger", "obudowa", "kabel"]
 
 def load_seen():
     if os.path.exists(SEEN_FILE):
         with open(SEEN_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            # obsługa starego formatu (lista) i nowego (słownik)
+            if isinstance(data, list):
+                return {}
+            return data
     return {}
 
 def save_seen(seen):
@@ -104,7 +116,15 @@ def wyciagnij_js_string(text, start_idx):
         i += 1
     raise ValueError("Nie znaleziono zamykającego cudzysłowu")
 
-def pobierz_oferty(url, max_price):
+def formatuj_date(iso_str):
+    """2026-04-26T12:12:46+02:00 -> 26.04.2026 12:12"""
+    try:
+        dt = datetime.fromisoformat(iso_str)
+        return dt.strftime("%d.%m.%Y %H:%M")
+    except:
+        return iso_str[:16].replace("T", " ")
+
+def pobierz_oferty(url, min_price, max_price):
     try:
         resp = requests.get(url, headers=HEADERS, timeout=20)
         resp.raise_for_status()
@@ -155,41 +175,36 @@ def pobierz_oferty(url, max_price):
     oferty = []
     for ad in ads:
         try:
-            # Tylko słowniki
             if not isinstance(ad, dict):
                 continue
-
-            # Pomijamy firmy
             if ad.get("isBusiness", False):
                 continue
 
             tytul = ad.get("title", "")
+            tytul_lower = tytul.lower()
 
-            # Pomijamy serwisy
-            if any(kw in tytul.lower() for kw in SERWIS_KEYWORDS):
+            if any(kw in tytul_lower for kw in SERWIS_KEYWORDS):
                 continue
 
-            # Tylko z wysyłką
+            # Wysyłka
             delivery = ad.get("delivery", {})
             rock = delivery.get("rock", {}) if isinstance(delivery, dict) else {}
             if not rock.get("active", False):
                 continue
 
-            # Cena z regularPrice.value
+            # Cena
             try:
                 cena = float(ad["price"]["regularPrice"]["value"])
             except (KeyError, TypeError, ValueError):
-                # Fallback na displayValue np. "20 zł"
                 try:
                     display = ad["price"]["displayValue"]
                     cena = float(re.sub(r"[^\d,.]", "", display).replace(",", "."))
                 except:
                     continue
 
-            if cena > max_price:
+            if cena < min_price or cena > max_price:
                 continue
 
-            # Zdjęcie — photos to lista URLi
             photos = ad.get("photos", [])
             photo = photos[0] if photos else ""
 
@@ -200,6 +215,7 @@ def pobierz_oferty(url, max_price):
                 "url": ad.get("url", ""),
                 "photo": photo,
                 "miasto": ad.get("location", {}).get("cityName", ""),
+                "dodano": formatuj_date(ad.get("createdTime", "")),
             })
 
         except Exception as e:
@@ -223,7 +239,9 @@ def wyslij_maila(found_items):
         rows += f"""
         <tr>
           <td style="padding:14px;border-bottom:1px solid #eee;vertical-align:top;">
-            <div style="font-size:11px;color:#888;margin-bottom:4px;">{item_name} &nbsp;·&nbsp; {o['miasto']}</div>
+            <div style="font-size:11px;color:#888;margin-bottom:4px;">
+              {item_name} &nbsp;·&nbsp; 📍 {o['miasto']} &nbsp;·&nbsp; 🕐 dodano {o['dodano']}
+            </div>
             <a href="{o['url']}" style="font-size:15px;color:#1a73e8;text-decoration:none;">{o['tytul']}</a><br>
             <span style="font-size:24px;font-weight:bold;color:#e53935;">{int(o['cena'])} zł</span>
           </td>
@@ -238,7 +256,7 @@ def wyslij_maila(found_items):
         {rows}
       </table>
       <p style="color:#bbb;font-size:11px;margin-top:16px;">
-        Progi: Pad Xbox ≤60 zł &nbsp;|&nbsp; DualSense ≤100 zł &nbsp;|&nbsp; JBL Flip 6 ≤160 zł
+        Progi: Pad Xbox 40–60 zł &nbsp;|&nbsp; DualSense 60–100 zł &nbsp;|&nbsp; JBL Flip 6 80–160 zł
       </p>
     </body></html>"""
 
@@ -259,8 +277,8 @@ def main():
     found_items = []
 
     for item in ITEMS:
-        print(f"[SZUKAM] {item['name']} (max {item['max_price']} zł)...")
-        oferty = pobierz_oferty(item["url"], item["max_price"])
+        print(f"[SZUKAM] {item['name']} ({item['min_price']}–{item['max_price']} zł)...")
+        oferty = pobierz_oferty(item["url"], item["min_price"], item["max_price"])
         print(f"  Po filtrowaniu: {len(oferty)} ofert.")
 
         for o in oferty:
