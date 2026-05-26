@@ -104,7 +104,7 @@ def wyciagnij_js_string(text, start_idx):
         i += 1
     raise ValueError("Nie znaleziono zamykającego cudzysłowu")
 
-def pobierz_oferty(url, max_price, debug_first=False):
+def pobierz_oferty(url, max_price):
     try:
         resp = requests.get(url, headers=HEADERS, timeout=20)
         resp.raise_for_status()
@@ -146,21 +146,138 @@ def pobierz_oferty(url, max_price, debug_first=False):
         ads = znajdz_ads_w_dict(data)
         if ads:
             print(f"  Znaleziono ogłoszenia w {nazwa}: {len(ads)} szt.")
-            if debug_first:
-                print(f"  DEBUG ads[0] pelny: {json.dumps(ads[0], ensure_ascii=False)}")
             break
 
     if not ads:
         print("  Nie udało się wyciągnąć listy ofert.")
         return []
 
-    return []
+    oferty = []
+    for ad in ads:
+        try:
+            # Tylko słowniki
+            if not isinstance(ad, dict):
+                continue
+
+            # Pomijamy firmy
+            if ad.get("isBusiness", False):
+                continue
+
+            tytul = ad.get("title", "")
+
+            # Pomijamy serwisy
+            if any(kw in tytul.lower() for kw in SERWIS_KEYWORDS):
+                continue
+
+            # Tylko z wysyłką
+            delivery = ad.get("delivery", {})
+            rock = delivery.get("rock", {}) if isinstance(delivery, dict) else {}
+            if not rock.get("active", False):
+                continue
+
+            # Cena z regularPrice.value
+            try:
+                cena = float(ad["price"]["regularPrice"]["value"])
+            except (KeyError, TypeError, ValueError):
+                # Fallback na displayValue np. "20 zł"
+                try:
+                    display = ad["price"]["displayValue"]
+                    cena = float(re.sub(r"[^\d,.]", "", display).replace(",", "."))
+                except:
+                    continue
+
+            if cena > max_price:
+                continue
+
+            # Zdjęcie — photos to lista URLi
+            photos = ad.get("photos", [])
+            photo = photos[0] if photos else ""
+
+            oferty.append({
+                "id": str(ad.get("id", "")),
+                "tytul": tytul,
+                "cena": cena,
+                "url": ad.get("url", ""),
+                "photo": photo,
+                "miasto": ad.get("location", {}).get("cityName", ""),
+            })
+
+        except Exception as e:
+            print(f"  Pomijam ofertę z błędem: {e}")
+            continue
+
+    return oferty
+
+def wyslij_maila(found_items):
+    sender = os.environ["GMAIL_USER"]
+    password = os.environ["GMAIL_APP_PASSWORD"]
+    recipient = os.environ["ALERT_EMAIL"]
+
+    rows = ""
+    for item_name, o in found_items:
+        photo_td = (
+            f'<td style="padding:12px;vertical-align:top;">'
+            f'<img src="{o["photo"]}" width="150" style="border-radius:8px;"></td>'
+            if o["photo"] else "<td></td>"
+        )
+        rows += f"""
+        <tr>
+          <td style="padding:14px;border-bottom:1px solid #eee;vertical-align:top;">
+            <div style="font-size:11px;color:#888;margin-bottom:4px;">{item_name} &nbsp;·&nbsp; {o['miasto']}</div>
+            <a href="{o['url']}" style="font-size:15px;color:#1a73e8;text-decoration:none;">{o['tytul']}</a><br>
+            <span style="font-size:24px;font-weight:bold;color:#e53935;">{int(o['cena'])} zł</span>
+          </td>
+          {photo_td}
+        </tr>"""
+
+    html = f"""
+    <html><body style="font-family:Arial,sans-serif;max-width:620px;margin:auto;color:#333;">
+      <h2 style="margin-bottom:4px;">🎮 Nowe okazje na OLX</h2>
+      <p style="color:#888;margin-top:0;">{datetime.now().strftime('%d.%m.%Y %H:%M')} — {len(found_items)} ofert poniżej progu</p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #eee;">
+        {rows}
+      </table>
+      <p style="color:#bbb;font-size:11px;margin-top:16px;">
+        Progi: Pad Xbox ≤60 zł &nbsp;|&nbsp; DualSense ≤100 zł &nbsp;|&nbsp; JBL Flip 6 ≤160 zł
+      </p>
+    </body></html>"""
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"🎮 OLX Alert — {len(found_items)} nowych okazji!"
+    msg["From"] = sender
+    msg["To"] = recipient
+    msg.attach(MIMEText(html, "html"))
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(sender, password)
+        server.sendmail(sender, recipient, msg.as_string())
+    print(f"[OK] Wysłano email z {len(found_items)} okazjami.")
 
 def main():
     print(f"Start: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}")
-    item = ITEMS[0]
-    print(f"[DEBUG] {item['name']}...")
-    pobierz_oferty(item["url"], item["max_price"], debug_first=True)
+    seen = load_seen()
+    found_items = []
+
+    for item in ITEMS:
+        print(f"[SZUKAM] {item['name']} (max {item['max_price']} zł)...")
+        oferty = pobierz_oferty(item["url"], item["max_price"])
+        print(f"  Po filtrowaniu: {len(oferty)} ofert.")
+
+        for o in oferty:
+            if not o["id"]:
+                continue
+            if o["id"] in seen:
+                continue
+            print(f"  ✅ OKAZJA: {o['tytul']} — {int(o['cena'])} zł — {o['url']}")
+            found_items.append((item["name"], o))
+            seen[o["id"]] = {"tytul": o["tytul"], "cena": o["cena"]}
+
+    if found_items:
+        wyslij_maila(found_items)
+    else:
+        print("[INFO] Brak nowych okazji.")
+
+    save_seen(seen)
     print("Gotowe.")
 
 if __name__ == "__main__":
