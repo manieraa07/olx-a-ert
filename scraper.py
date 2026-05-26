@@ -8,8 +8,6 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
-# ── Konfiguracja przedmiotów ──────────────────────────────────────────────────
-# Format URL OLX: /kategoria/q-fraza/?search[filtry]
 ITEMS = [
     {
         "name": "Pad Xbox",
@@ -57,7 +55,6 @@ HEADERS = {
 
 SERWIS_KEYWORDS = ["serwis", "naprawa", "części", "repair", "sklep", "hurtownia"]
 
-# ── Seen offers ───────────────────────────────────────────────────────────────
 def load_seen():
     if os.path.exists(SEEN_FILE):
         with open(SEEN_FILE, "r", encoding="utf-8") as f:
@@ -68,7 +65,6 @@ def save_seen(seen):
     with open(SEEN_FILE, "w", encoding="utf-8") as f:
         json.dump(seen, f, ensure_ascii=False, indent=2)
 
-# ── Parsowanie JS stringa (identyczne z działającym skryptem mieszkań) ────────
 def znajdz_ads_w_dict(data, depth=0):
     if depth > 12:
         return None
@@ -108,8 +104,7 @@ def wyciagnij_js_string(text, start_idx):
         i += 1
     raise ValueError("Nie znaleziono zamykającego cudzysłowu")
 
-# ── Pobieranie i parsowanie ofert ─────────────────────────────────────────────
-def pobierz_oferty(url, max_price):
+def pobierz_oferty(url, max_price, debug=False):
     try:
         resp = requests.get(url, headers=HEADERS, timeout=20)
         resp.raise_for_status()
@@ -151,134 +146,23 @@ def pobierz_oferty(url, max_price):
         ads = znajdz_ads_w_dict(data)
         if ads:
             print(f"  Znaleziono ogłoszenia w {nazwa}: {len(ads)} szt.")
+            # DEBUG — wypisz typ i fragment pierwszego elementu
+            print(f"  DEBUG typ ads[0]: {type(ads[0])}")
+            print(f"  DEBUG ads[0]: {json.dumps(ads[0], ensure_ascii=False)[:600]}")
             break
 
     if not ads:
         print("  Nie udało się wyciągnąć listy ofert.")
         return []
 
-    def wyciagnij_cene(ad):
-        p = ad.get("price")
-        if isinstance(p, dict):
-            for k in ("regularPrice", "displayValue"):
-                v = p.get(k)
-                if isinstance(v, dict) and v.get("value") is not None:
-                    return v.get("value")
-                elif v is not None:
-                    try:
-                        return float(re.sub(r"[^\d,.]", "", str(v)).replace(",", "."))
-                    except:
-                        pass
-            if p.get("value") is not None:
-                return p.get("value")
-        return None
+    return []  # tymczasowo zwracamy pusta liste zeby zobaczyc tylko debug
 
-    oferty = []
-    for ad in ads:
-        try:
-            if ad.get("business", False):
-                continue
-            tytul = ad.get("title", "")
-            if any(kw in tytul.lower() for kw in SERWIS_KEYWORDS):
-                continue
-            delivery = ad.get("delivery")
-            if delivery is False:
-                continue
-            cena = wyciagnij_cene(ad)
-            if cena is None:
-                continue
-            try:
-                cena = float(str(cena).replace(",", ".").replace(" ", "").replace("\xa0", ""))
-            except:
-                continue
-            if cena > max_price:
-                continue
-            oferty.append({
-                "id": str(ad.get("id", "")),
-                "tytul": tytul,
-                "cena": cena,
-                "url": ad.get("url", ""),
-                "photo": (ad.get("photos") or [{}])[0].get("link", "")
-                         .replace("{width}", "400").replace("{height}", "300"),
-            })
-        except Exception as e:
-            print(f"  Pomijam ofertę z błędem: {e}")
-            continue
-
-    return oferty
-
-# ── Email ─────────────────────────────────────────────────────────────────────
-def wyslij_maila(found_items):
-    sender = os.environ["GMAIL_USER"]
-    password = os.environ["GMAIL_APP_PASSWORD"]
-    recipient = os.environ["ALERT_EMAIL"]
-
-    rows = ""
-    for item_name, o in found_items:
-        photo_td = (
-            f'<td style="padding:12px;vertical-align:top;">'
-            f'<img src="{o["photo"]}" width="150" style="border-radius:8px;"></td>'
-            if o["photo"] else "<td></td>"
-        )
-        rows += f"""
-        <tr>
-          <td style="padding:14px;border-bottom:1px solid #eee;vertical-align:top;">
-            <div style="font-size:11px;color:#888;margin-bottom:4px;">{item_name}</div>
-            <a href="{o['url']}" style="font-size:15px;color:#1a73e8;text-decoration:none;">{o['tytul']}</a><br>
-            <span style="font-size:24px;font-weight:bold;color:#e53935;">{int(o['cena'])} zł</span>
-          </td>
-          {photo_td}
-        </tr>"""
-
-    html = f"""
-    <html><body style="font-family:Arial,sans-serif;max-width:620px;margin:auto;color:#333;">
-      <h2 style="margin-bottom:4px;">🎮 Nowe okazje na OLX</h2>
-      <p style="color:#888;margin-top:0;">{datetime.now().strftime('%d.%m.%Y %H:%M')} — {len(found_items)} ofert poniżej progu</p>
-      <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #eee;">
-        {rows}
-      </table>
-      <p style="color:#bbb;font-size:11px;margin-top:16px;">
-        Progi: Pad Xbox ≤60 zł &nbsp;|&nbsp; DualSense ≤100 zł &nbsp;|&nbsp; JBL Flip 6 ≤160 zł
-      </p>
-    </body></html>"""
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"🎮 OLX Alert — {len(found_items)} nowych okazji!"
-    msg["From"] = sender
-    msg["To"] = recipient
-    msg.attach(MIMEText(html, "html"))
-
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(sender, password)
-        server.sendmail(sender, recipient, msg.as_string())
-    print(f"[OK] Wysłano email z {len(found_items)} okazjami.")
-
-# ── Główna logika ─────────────────────────────────────────────────────────────
 def main():
     print(f"Start: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}")
-    seen = load_seen()
-    found_items = []
-
-    for item in ITEMS:
-        print(f"[SZUKAM] {item['name']} (max {item['max_price']} zł)...")
-        oferty = pobierz_oferty(item["url"], item["max_price"])
-        print(f"  Po filtrowaniu: {len(oferty)} ofert.")
-
-        for o in oferty:
-            if not o["id"]:
-                continue
-            if o["id"] in seen:
-                continue
-            print(f"  ✅ OKAZJA: {o['tytul']} — {int(o['cena'])} zł — {o['url']}")
-            found_items.append((item["name"], o))
-            seen[o["id"]] = {"tytul": o["tytul"], "cena": o["cena"]}
-
-    if found_items:
-        wyslij_maila(found_items)
-    else:
-        print("[INFO] Brak nowych okazji.")
-
-    save_seen(seen)
+    # Sprawdzamy tylko pierwszy przedmiot dla debugowania
+    item = ITEMS[0]
+    print(f"[DEBUG] {item['name']}...")
+    pobierz_oferty(item["url"], item["max_price"], debug=True)
     print("Gotowe.")
 
 if __name__ == "__main__":
