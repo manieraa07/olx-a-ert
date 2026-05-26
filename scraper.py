@@ -104,7 +104,7 @@ def wyciagnij_js_string(text, start_idx):
         i += 1
     raise ValueError("Nie znaleziono zamykającego cudzysłowu")
 
-def pobierz_oferty(url, max_price, debug=False):
+def pobierz_oferty(url, max_price, debug_first=False):
     try:
         resp = requests.get(url, headers=HEADERS, timeout=20)
         resp.raise_for_status()
@@ -146,23 +146,21 @@ def pobierz_oferty(url, max_price, debug=False):
         ads = znajdz_ads_w_dict(data)
         if ads:
             print(f"  Znaleziono ogłoszenia w {nazwa}: {len(ads)} szt.")
-            # DEBUG — wypisz typ i fragment pierwszego elementu
-            print(f"  DEBUG typ ads[0]: {type(ads[0])}")
-            print(f"  DEBUG ads[0]: {json.dumps(ads[0], ensure_ascii=False)[:600]}")
+            if debug_first:
+                print(f"  DEBUG ads[0] pelny: {json.dumps(ads[0], ensure_ascii=False)}")
             break
 
     if not ads:
         print("  Nie udało się wyciągnąć listy ofert.")
         return []
 
-    return []  # tymczasowo zwracamy pusta liste zeby zobaczyc tylko debug
+    return []
 
 def main():
     print(f"Start: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}")
-    # Sprawdzamy tylko pierwszy przedmiot dla debugowania
     item = ITEMS[0]
     print(f"[DEBUG] {item['name']}...")
-    pobierz_oferty(item["url"], item["max_price"], debug=True)
+    pobierz_oferty(item["url"], item["max_price"], debug_first=True)
     print("Gotowe.")
 
 if __name__ == "__main__":
