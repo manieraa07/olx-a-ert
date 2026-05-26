@@ -14,11 +14,11 @@ ITEMS = [
         "url": (
             "https://www.olx.pl/elektronika/gry-konsole/akcesoria-gamingowe/q-pad-xbox/"
             "?search[filter_float_price:to]=60"
-            "&search[filter_float_price:from]=40"
+            "&search[filter_float_price:from]=50"
             "&search[filter_enum_state][0]=used"
             "&search[order]=created_at:desc"
         ),
-        "min_price": 40,
+        "min_price": 50,
         "max_price": 60,
     },
     {
@@ -59,7 +59,7 @@ HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
-SERWIS_KEYWORDS = ["serwis", "naprawa", "części", "repair", "sklep", "hurtownia",
+SERWIS_KEYWORDS = ["serwis", "naprawa", "części", "repair", "sklep", "hurtownia", "etui", "nakładka", "uchwyt", "stacja ładująca", "ładowarka", "analog", "grip", "trigger", "obudowa", "kabel", "360", "power a", "powera", "przewodowy", "wired", "enhanced", "camo", "mini", "nano", "one s", "one x"]
                    "etui", "nakładka", "uchwyt", "stacja ładująca", "ładowarka",
                    "analog", "grip", "trigger", "obudowa", "kabel"]
 
