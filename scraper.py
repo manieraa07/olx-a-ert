@@ -59,9 +59,13 @@ HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
-SERWIS_KEYWORDS = ["serwis", "naprawa", "części", "repair", "sklep", "hurtownia", "etui", "nakładka", "uchwyt", "stacja ładująca", "ładowarka", "analog", "grip", "trigger", "obudowa", "kabel", "360", "power a", "powera", "przewodowy", "wired", "enhanced", "camo", "mini", "nano", "one s", "one x"]
-                   "etui", "nakładka", "uchwyt", "stacja ładująca", "ładowarka",
-                   "analog", "grip", "trigger", "obudowa", "kabel"]
+SERWIS_KEYWORDS = [
+    "serwis", "naprawa", "części", "repair", "sklep", "hurtownia",
+    "etui", "nakładka", "uchwyt", "stacja ładująca", "ładowarka",
+    "analog", "grip", "trigger", "obudowa", "kabel",
+    "360", "power a", "powera", "przewodowy", "wired",
+    "enhanced", "camo", "mini", "nano", "one s", "one x",
+]
 
 def load_seen():
     if os.path.exists(SEEN_FILE):
